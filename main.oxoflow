@@ -1,0 +1,226 @@
+# oxo-flow port of epigen/genome_tracks v2.0.5 (sha e7016b746d98be1e824ed6a3b767574458ce7cf7)
+# Default main path: BAM input -> optional per-group merge (samtools) ->
+# deepTools coverage (bamCoverage) -> bigWig -> genome track plots (gtracks)
+# + UCSC track hub. Single-cell splitting (sinto), IGV-report, and the
+# make_bed/env_export record-keeping rules are not ported (see README).
+
+[workflow]
+name = "oxo-flow-genome-tracks"
+version = "1.0.0"
+description = "Genome browser track generation from BAM files — oxo-flow port of epigen/genome_tracks"
+author = "oxo-flow-community"
+
+[config]
+# upstream config/config.yaml defaults, adapted paths
+project_name = "myData"
+result_path = "results"
+sample_annotation = "test/fixtures/annotation.csv"
+bam_dir = "test/fixtures/bams"
+email = "sreichl@cemm.at"
+genome = "mm10"
+bamCoverage_parameters = "-p max --binSize 10  --normalizeUsing RPGC --effectiveGenomeSize 2407883318"
+gene_list = "test/fixtures/genes.csv"
+genome_bed = "test/fixtures/genome_bed/ref.bed.gz"
+x_axis = "bottom"
+width = "20"
+base_buffer = "2000"
+file_type = "pdf"
+track_colors = "untreated=#800080,treated=#00FFFF"
+
+# track groups: unique values of the 'group' column of the sample annotation
+# (upstream fan-out unit for merging + coverage + hub)
+[[sample_groups]]
+name = "cohort"
+samples = ["untreated", "treated"]
+
+# genes / genomic regions of the gene_list CSV (upstream fan-out unit for
+# plot_tracks); ':' in region names is replaced by '-' like upstream output
+# file naming (genes.replace(':', '-'))
+[[pairs]]
+pair_id = "chr1-1000-2000"
+experiment = "chr1-1000-2000"
+
+[[pairs]]
+pair_id = "Tmem26"
+experiment = "Tmem26"
+
+# merge .bam files of the same group according to annotation using samtools
+# https://www.htslib.org/doc/samtools-merge.html
+[[rules]]
+name = "merge_bams"
+description = "Merge BAM files of a group and index the merged BAM (samtools)"
+input = ["{config.bam_dir}/{sample}/*.bam"]
+output = ["{config.result_path}/genome_tracks/merged_bams/{sample}.bam"]
+log = "logs/rules/merge_bams_{sample}.log"
+shell = """
+samtools merge -@ {threads} {output[0]} {input}
+
+samtools index -@ {threads} -b {output[0]}
+"""
+
+[rules.resources]
+threads = 4
+memory = "4000M"
+
+[rules.environment]
+conda = "envs/pygenometracks.yaml"
+
+# generate a bigWig file per group using bamCoverage
+# https://deeptools.readthedocs.io/en/develop/content/tools/bamCoverage.html
+[[rules]]
+name = "coverage"
+description = "Generate a bigWig coverage file per group (deepTools bamCoverage)"
+input = ["{config.result_path}/genome_tracks/merged_bams/{sample}.bam"]
+output = ["{config.result_path}/genome_tracks/bigWigs/{sample}.bw"]
+log = "logs/rules/coverage_{sample}.log"
+shell = """
+bamCoverage --bam {input[0]} {config.bamCoverage_parameters} -o {output[0]} > {output[0]}.log 2>&1;
+"""
+
+[rules.resources]
+threads = 4
+memory = "4000M"
+
+[rules.environment]
+conda = "envs/pygenometracks.yaml"
+
+# extract gene coordinates + isoform counts from the 12-column genome BED
+# (upstream Snakefile load-time parse_gene/parse_region logic, ported to
+# scripts/annotate_genes.py; genes not found in the BED are dropped and
+# written to {result_path}/genome_tracks/genes_not_found.csv)
+[[rules]]
+name = "annotate_genes"
+description = "Extract gene coordinates, isoform counts and ymax from the genome BED"
+input = ["{config.gene_list}", "{config.genome_bed}"]
+output = ["{config.result_path}/genome_tracks/genes_annotated.tsv"]
+log = "logs/rules/annotate_genes.log"
+shell = """
+python3 scripts/annotate_genes.py \
+    --gene-list {input[0]} \
+    --genome-bed {input[1]} \
+    --base-buffer {config.base_buffer} \
+    --out {output[0]} \
+    --not-found-out {config.result_path}/genome_tracks/genes_not_found.csv
+"""
+
+[rules.resources]
+threads = 1
+memory = "4000M"
+
+# plot genome tracks of groups using pyGenomeTracks wrapper gtracks
+# https://gitlab.com/salk-tm/gtracks
+[[rules]]
+name = "plot_tracks"
+description = "Plot genome tracks of all groups for a gene/region (gtracks)"
+input = [
+    "{config.genome_bed}",
+    "{config.gene_list}",
+    "{config.result_path}/genome_tracks/genes_annotated.tsv",
+]
+expand_inputs = [
+    { pattern = "{config.result_path}/genome_tracks/bigWigs/{sample}.bw", variables = { sample = "config.samples_list" } }
+]
+output = ["{config.result_path}/genome_tracks/tracks/{pair_id}.{config.file_type}"]
+depends_on = ["coverage"]
+log = "logs/rules/plot_tracks_{pair_id}.log"
+shell = """
+export GTRACKS_GENES_PATH={input[0]}
+
+line=$(awk -F'\\t' '$1==g' g="{pair_id}" {input[2]})
+coords=$(echo "$line" | awk -F'\\t' '{{print $2":"$3"-"$4}}')
+rows=$(echo "$line" | cut -f5)
+ymax=$(echo "$line" | cut -f6)
+if [ "$ymax" != "0" ]; then maxflag="--max $ymax"; else maxflag=""; fi
+bwlist=""
+for s in $(echo {config.samples_list} | tr ',' ' '); do
+  bwlist="$bwlist {config.result_path}/genome_tracks/bigWigs/$s.bw"
+done
+palette=""
+for s in $(echo {config.samples_list} | tr ',' ' '); do
+  c=$(echo {config.track_colors} | tr ',' '\\n' | awk -F= '$1==g' g="$s" | sed 's/^[^=]*=//')
+  if [ -z "$c" ]; then c="#000000"; fi
+  palette="$palette '$c'"
+done
+gtracks "$coords" $bwlist {output[0]} --genes {input[0]} $maxflag --gene-rows "$rows" --genes-height "$rows" --x-axis {config.x_axis} --width {config.width} --color-palette "$palette"
+"""
+
+[rules.resources]
+threads = 1
+memory = "4000M"
+
+[rules.environment]
+conda = "envs/pygenometracks.yaml"
+
+# prepare a UCSC genome browser track hub (bigWig symlinks, genomes.txt,
+# hub.txt, trackDb.txt) — port of the upstream 'ucsc_hub' run block
+[[rules]]
+name = "ucsc_hub"
+description = "Create a UCSC genome browser track hub for all bigWigs"
+expand_inputs = [
+    { pattern = "{config.result_path}/genome_tracks/bigWigs/{sample}.bw", variables = { sample = "config.samples_list" } }
+]
+output = [
+    "{config.result_path}/genome_tracks/bigWigs/{config.genome}/genomes.txt",
+    "{config.result_path}/genome_tracks/bigWigs/{config.genome}/hub.txt",
+    "{config.result_path}/genome_tracks/bigWigs/{config.genome}/trackDb.txt",
+]
+depends_on = ["coverage"]
+log = "logs/rules/ucsc_hub.log"
+shell = """
+python3 scripts/ucsc_hub.py \
+    --bw-dir {config.result_path}/genome_tracks/bigWigs \
+    --genome {config.genome} \
+    --project-name {config.project_name} \
+    --email {config.email} \
+    --groups {config.samples_list} \
+    --colors {config.track_colors}
+"""
+
+[rules.resources]
+threads = 1
+memory = "1000M"
+
+# export used annotation file for documentation and reproducibility
+[[rules]]
+name = "annot_export"
+description = "Copy the sample annotation file into the results configs dir"
+input = ["{config.sample_annotation}"]
+output = ["{config.result_path}/genome_tracks/configs/{config.project_name}_annot.csv"]
+log = "logs/rules/annot_export.log"
+shell = """
+cp {input[0]} {output[0]}
+"""
+
+[rules.resources]
+threads = 1
+memory = "1000M"
+
+# export used gene list for documentation and reproducibility
+[[rules]]
+name = "gene_list_export"
+description = "Copy the gene list file into the results configs dir"
+input = ["{config.gene_list}"]
+output = ["{config.result_path}/genome_tracks/configs/gene_list.csv"]
+log = "logs/rules/gene_list_export.log"
+shell = """
+cp {input[0]} {output[0]}
+"""
+
+[rules.resources]
+threads = 1
+memory = "1000M"
+
+# add configuration files to report (upstream json.dump(config) run block)
+[[rules]]
+name = "config_export"
+description = "Dump the workflow [config] table into the results configs dir"
+input = ["main.oxoflow"]
+output = ["{config.result_path}/genome_tracks/configs/{config.project_name}_config.yaml"]
+log = "logs/rules/config_export.log"
+shell = """
+python3 scripts/export_config.py {input[0]} {output[0]}
+"""
+
+[rules.resources]
+threads = 1
+memory = "1000M"

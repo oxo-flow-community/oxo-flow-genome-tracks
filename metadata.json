@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "oxo-flow-genome-tracks",
+  "title": "epigen genome_tracks (port)",
+  "engine": "oxo-flow",
+  "source": {
+    "repo": "epigen/genome_tracks",
+    "url": "https://github.com/epigen/genome_tracks",
+    "tag": "v2.0.5",
+    "sha": "e7016b746d98be1e824ed6a3b767574458ce7cf7",
+    "license": "MIT"
+  },
+  "created": "2026-08-15",
+  "domain": "genomics",
+  "tags": ["epigenomics", "genome-tracks", "bigwig", "coverage", "visualization", "snakemake", "deeptools"],
+  "description": "oxo-flow port of the epigen/genome_tracks Snakemake workflow: merge BAM files per group (samtools), compute bigWig coverage (deepTools bamCoverage), plot per-gene genome tracks (gtracks/pyGenomeTracks) and create a UCSC genome browser track hub.",
+  "scope": ["merge_bams", "coverage", "annotate_genes", "plot_tracks", "ucsc_hub", "annot_export", "gene_list_export", "config_export"],
+  "excluded": [
+    "split_sc_bam — single-cell sinto branch, not on the default path",
+    "igv_report — temporarily deactivated upstream (commented out of rule all)",
+    "make_bed — only feeds the deactivated igv_report rule",
+    "env_export — conda-runtime documentation rule for envs of non-ported branches; envs/ yamls serve the same role"
+  ],
+  "rule_count": 8,
+  "tools": ["samtools@1.19.2", "deeptools@3.5.5", "pygenometracks@3.8", "gtracks@1.12.6"],
+  "status": "ready",
+  "repo_url": "https://github.com/oxo-flow-community/oxo-flow-genome-tracks",
+  "site_page": "https://oxo-flow-community.github.io/oxo-flow-genome-tracks/",
+  "upstream_license": "MIT"
+}

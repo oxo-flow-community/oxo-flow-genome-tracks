@@ -1,0 +1,4 @@
+bam,group
+test/fixtures/bams/untreated/S1.bam,untreated
+test/fixtures/bams/untreated/S2.bam,untreated
+test/fixtures/bams/treated/T1.bam,treated
