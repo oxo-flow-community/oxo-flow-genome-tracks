@@ -1,23 +1,108 @@
-# Genome Browser Track Visualization Workflow (oxo-flow port)
+# oxo-flow-genome-tracks — Genome browser tracks: coverage, gene plots and UCSC hub
+
+> ★ Verified · ⇄ Official port of [`epigen/genome_tracks`](https://github.com/epigen/genome_tracks) @ `v2.0.5` — same tools, same versions, same commands. Part of the [oxo-flow-community catalog](https://oxo-flow-community.github.io/).
 
 [![CI](https://github.com/oxo-flow-community/oxo-flow-genome-tracks/actions/workflows/ci.yml/badge.svg)](https://github.com/oxo-flow-community/oxo-flow-genome-tracks/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-A port of the [epigen/genome_tracks](https://github.com/epigen/genome_tracks)
-Snakemake workflow to oxo-flow: generation of genome browser tracks of
-aligned/mapped BAM files (e.g., RNA-seq, ATAC-seq). BAM files are merged per
-group with `samtools merge`, coverage is computed with deepTools
-`bamCoverage` into bigWig files, and genome tracks per gene / genomic region
-are plotted with the `gtracks` wrapper for pyGenomeTracks. A UCSC genome
-browser track hub is created for online sharing.
+Turn aligned BAM files (RNA-seq, ATAC-seq or any aligned/mapped data) into
+publication-ready genome browser tracks. BAM files are merged per experimental
+group with `samtools merge` and indexed; per-group coverage is computed with
+deepTools `bamCoverage` into bigWig files (RPGC-normalized by default); genome
+tracks per gene or genomic region — with isoform-aware layout, configurable
+colors, axis and width — are plotted with the `gtracks` wrapper for
+pyGenomeTracks; and a UCSC genome browser track hub is generated so all tracks
+can be shared online. You get merged, indexed BAMs, bigWig coverage files,
+per-gene/per-region track plots, and a UCSC track hub.
+
+## Installation
+
+### 1. Install oxo-flow
+
+Requires **oxo-flow >= 0.11.0**. Release binary (recommended):
+
+```bash
+curl -fL -o oxo-flow.tar.gz \
+  https://github.com/Traitome/oxo-flow/releases/download/v0.11.0/oxo-flow-v0.11.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf oxo-flow.tar.gz
+sudo mv oxo-flow /usr/local/bin/
+```
+
+Alternatively via conda: `conda install -c bioconda oxo-flow-cli` (note: the
+conda package may lag behind releases; other platform binaries are available
+on the [releases page](https://github.com/Traitome/oxo-flow/releases)).
+
+### 2. Get this workflow
+
+```bash
+git clone https://github.com/oxo-flow-community/oxo-flow-genome-tracks.git
+cd oxo-flow-genome-tracks
+```
+
+### 3. Requirements
+
+Derived from `main.oxoflow`:
+
+- **Reference data (user-provided)** — point the `[config]` block of
+  `main.oxoflow` at your files:
+  - BAM files per group at `<bam_dir>/<group>/*.bam` (e.g.
+    `test/fixtures/bams/untreated/*.bam`). Input BAMs need no index —
+    `merge_bams` produces merged, indexed BAMs (`samtools merge` + `samtools index -b`).
+  - A sample annotation CSV with a `group` column (`sample_annotation`, e.g.
+    `test/fixtures/annotation.csv`); the group values are the fan-out unit for
+    merging, coverage and the hub.
+  - A gene list CSV with `gene_region,ymax` columns (`gene_list`, e.g.
+    `test/fixtures/genes.csv`) — one gene symbol or `chr:start-end` region per row.
+  - A 12-column genome BED for gene annotation (`genome_bed`, e.g.
+    `test/fixtures/genome_bed/ref.bed.gz`). No genome FASTA or annotation GTF
+    is required: genes are annotated from the BED, and bamCoverage normalizes
+    via the built-in `--effectiveGenomeSize` (default config is mm10,
+    `2407883318`).
+- **Compute** — up to 4 CPUs / 4 GB per rule: `merge_bams` (samtools) and
+  `coverage` (bamCoverage) run with `threads = 4` / `4000M`; all other rules
+  need 1 CPU / 1 GB.
+- **Tools** — conda environments with pinned versions, declared per rule in
+  `main.oxoflow` (`[rules.environment]`): `envs/pygenometracks.yaml` pins
+  samtools 1.19.2, deepTools 3.5.5, pyGenomeTracks 3.8, python 3.10.13,
+  pip 24.0 and gtracks 1.12.6 (pip). Conda/mamba is required at runtime to
+  build the environment; the helper rules (`annotate_genes`, `ucsc_hub`,
+  `config_export`) need only a system `python3` (stdlib).
+- **Disk** — results land under `results/genome_tracks/`; merged BAMs plus
+  per-group bigWigs are the main outputs, modest in size for typical groups.
+
+## Usage
+
+```bash
+# 1. install oxo-flow (see Requirements)
+# 2. prepare data: BAMs under <bam_dir>/<group>/*.bam + annotation.csv +
+#    genes.csv + genome BED (see test/fixtures/ and config/README.md upstream)
+# 3. preview the plan
+oxo-flow dry-run main.oxoflow
+# 4. run
+oxo-flow run main.oxoflow -j 8
+# 5. run a subset (one group / one gene)
+oxo-flow run main.oxoflow --samples first:1
+oxo-flow run main.oxoflow -t plot_tracks
+```
+
+Results land under `results/genome_tracks/`: `merged_bams/`, `bigWigs/`
+(+ UCSC hub), `tracks/{gene|region}.pdf`, `configs/`, `genes_annotated.tsv`.
+
+Configuration: all settings live in the `[config]` table of `main.oxoflow` —
+`project_name`, `result_path`, `sample_annotation`, `bam_dir`, `gene_list`,
+`genome_bed`, `bamCoverage_parameters` (default `-p max --binSize 10
+--normalizeUsing RPGC --effectiveGenomeSize 2407883318` for mm10),
+`track_colors` (comma-joined `group=#hex`, `#000000` default), `x_axis`,
+`width`, `base_buffer`, `file_type`. Group fan-out is declared in
+`[[sample_groups]]`, per-gene fan-out in `[[pairs]]`; keep the annotation CSV,
+gene list, genome BED and BAMs in sync with those tables and `config.bam_dir`.
 
 ## Source
 
-Ported from **[epigen/genome_tracks](https://github.com/epigen/genome_tracks)**,
-version `v2.0.5` (commit `e7016b746d98be1e824ed6a3b767574458ce7cf7`, MIT
-license). This port is maintained independently and **may lag the upstream** —
-check the `v2.0.5` tag above and the fidelity table below for the exact
-ported state. Port date: 2026-08-15.
+Upstream: **[epigen/genome_tracks](https://github.com/epigen/genome_tracks)**
+@ `v2.0.5` (commit `e7016b746d98be1e824ed6a3b767574458ce7cf7`), MIT license.
+Created 2026-08-15; this workflow may lag behind upstream releases. See
+[NOTICE.md](NOTICE.md) for attribution.
 
 ## Fidelity
 
@@ -48,48 +133,19 @@ gene list, genome BED and BAM files must be kept in sync with `[[sample_groups]]
 `[[pairs]]` and `config.bam_dir`; the annotation CSV itself remains the
 documentation record (`annot_export`).
 
-## Quickstart
+## Test
 
 ```bash
-# 1. install oxo-flow (see Requirements)
-# 2. prepare data: BAMs under <bam_dir>/<group>/*.bam + annotation.csv +
-#    genes.csv + genome BED (see test/fixtures/ and config/README.md upstream)
-# 3. preview the plan
-oxo-flow dry-run main.oxoflow
-# 4. run
-oxo-flow run main.oxoflow -j 8
-# 5. run a subset (one group / one gene)
-oxo-flow run main.oxoflow --samples first:1
-oxo-flow run main.oxoflow -t plot_tracks
+bash test/run.sh
 ```
 
-Results land under `results/genome_tracks/`: `merged_bams/`, `bigWigs/`
-(+ UCSC hub), `tracks/{gene|region}.pdf`, `configs/`, `genes_annotated.tsv`.
-
-## Requirements
-
-- **oxo-flow ≥ 0.11.0** — install the prebuilt binary:
-
-```bash
-curl -fL -o oxo-flow.tar.gz \
-  https://github.com/Traitome/oxo-flow/releases/download/v0.11.0/oxo-flow-v0.11.0-x86_64-unknown-linux-gnu.tar.gz
-tar xzf oxo-flow.tar.gz
-sudo mv oxo-flow /usr/local/bin/
-```
-
-- Conda users may alternatively `conda install -c bioconda oxo-flow-cli`
-  (note: the bioconda package currently lags the release binary at 0.10.2 —
-  some 0.11.0 format features may not validate).
-- Docker/Singularity/conda at runtime, per the environments declared in
-  `main.oxoflow` (`envs/pygenometracks.yaml` provides samtools, deepTools,
-  pyGenomeTracks and gtracks with exact pins; the helper rules need only a
-  system `python3`).
+Runs `validate` + `lint` (warnings acceptable, errors not) + `dry-run` +
+a debug-instance check against `main.oxoflow`. Expects `oxo-flow` on `PATH`
+(or set `OXO=/path/to/oxo-flow`); CI runs the same script on every push.
 
 ## License
 
-Apache-2.0. Copyright (c) 2026 oxo-flow-community. Upstream attribution in
-[NOTICE.md](NOTICE.md).
-
-## Community
-
-https://oxo-flow-community.github.io/
+Apache-2.0 for the workflow (see [LICENSE](LICENSE)). Copyright (c) 2026
+oxo-flow-community. The upstream workflow is MIT licensed; attribution and
+the upstream license text are in [NOTICE.md](NOTICE.md) and
+[LICENSE.upstream](LICENSE.upstream).
