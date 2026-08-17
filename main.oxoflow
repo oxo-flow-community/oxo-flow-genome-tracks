@@ -159,9 +159,11 @@ description = "Create a UCSC genome browser track hub for all bigWigs"
 expand_inputs = [
     { pattern = "{config.result_path}/genome_tracks/bigWigs/{sample}.bw", variables = { sample = "config.samples_list" } }
 ]
+# UCSC hub layout (as scripts/ucsc_hub.py writes it): hub.txt + genomes.txt
+# at the hub root (bigWigs/), trackDb.txt inside the per-genome directory.
 output = [
-    "{config.result_path}/genome_tracks/bigWigs/{config.genome}/genomes.txt",
-    "{config.result_path}/genome_tracks/bigWigs/{config.genome}/hub.txt",
+    "{config.result_path}/genome_tracks/bigWigs/genomes.txt",
+    "{config.result_path}/genome_tracks/bigWigs/hub.txt",
     "{config.result_path}/genome_tracks/bigWigs/{config.genome}/trackDb.txt",
 ]
 depends_on = ["coverage"]
