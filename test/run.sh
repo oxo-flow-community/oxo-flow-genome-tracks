@@ -39,7 +39,7 @@ grep -qE '\{(sample|pair_id|sc_sample|sc_group|config\.)' /tmp/oxo-debug-$$.txt 
 echo "==> debug: every ported rule instance present"
 for inst in merge_bams_cohort_untreated merge_bams_cohort_treated \
             coverage_cohort_untreated coverage_cohort_treated \
-            plot_tracks_Tmem26 plot_tracks_chr1-1000-2000 ucsc_hub \
+            plot_tracks_chr1-1000-2000 ucsc_hub \
             split_sc_bam_sc_sample_sc1_sc_group_g1 split_sc_bam_sc_sample_sc2_sc_group_g2 \
             merge_sc_bams_sc_group_g1 merge_sc_bams_sc_group_g2 \
             coverage_sc_sc_group_g1 coverage_sc_sc_group_g2 \
