@@ -35,12 +35,14 @@ def main():
     genome_dir = os.path.join(args.bw_dir, args.genome)
     os.makedirs(genome_dir, exist_ok=True)
 
-    # create bigWig symlinks (as upstream: os.symlink('../' + basename, ...))
+    # create bigWig symlinks (as upstream: os.symlink('../' + basename, ...));
+    # upstream's plain symlink is not idempotent — re-runs die with
+    # FileExistsError (live on resume) — unlink first.
     for group in groups:
-        os.symlink(
-            os.path.join("..", "{}.bw".format(group)),
-            os.path.join(genome_dir, "{}.bw".format(group)),
-        )
+        dst = os.path.join(genome_dir, "{}.bw".format(group))
+        if os.path.lexists(dst):
+            os.unlink(dst)
+        os.symlink(os.path.join("..", "{}.bw".format(group)), dst)
 
     # create genomes.txt
     with open(os.path.join(args.bw_dir, "genomes.txt"), "w") as gf:

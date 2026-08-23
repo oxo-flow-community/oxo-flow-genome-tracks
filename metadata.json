@@ -13,17 +13,14 @@
   },
   "created": "2026-08-15",
   "domain": "genomics",
-  "tags": ["epigenomics", "genome-tracks", "bigwig", "coverage", "visualization", "ucsc-hub", "deeptools", "pygenometracks", "snakemake"],
-  "scope": ["merge_bams", "coverage", "annotate_genes", "plot_tracks", "ucsc_hub", "annot_export", "gene_list_export", "config_export"],
+  "tags": ["epigenomics", "genome-tracks", "bigwig", "coverage", "visualization", "ucsc-hub", "deeptools", "pygenometracks", "snakemake", "single-cell", "sinto", "igv"],
+  "scope": ["merge_bams", "coverage", "annotate_genes", "plot_tracks", "ucsc_hub", "split_sc_bam", "merge_sc_bams", "coverage_sc", "make_bed", "igv_report", "annot_export", "gene_list_export", "config_export"],
   "excluded": [
-    "split_sc_bam — single-cell sinto branch, not on the default path",
-    "igv_report — temporarily deactivated upstream (commented out of rule all)",
-    "make_bed — only feeds the deactivated igv_report rule",
-    "env_export — conda-runtime documentation rule for envs of non-ported branches; envs/ yamls serve the same role"
+    "env_export — conda-runtime documentation rule; the checked-in envs/*.yaml for the pygenometracks/sinto/igv_reports branches serve the same reproducibility role"
   ],
-  "rule_count": 8,
-  "tools": ["samtools", "deeptools", "pygenometracks", "gtracks"],
-  "description": "Merge BAM files per experimental group with samtools, compute normalized bigWig coverage with deepTools bamCoverage (RPGC by default), plot isoform-aware per-gene and per-region genome tracks with gtracks/pyGenomeTracks, and publish a UCSC genome browser track hub — end-to-end track generation for RNA-seq, ATAC-seq and other aligned BAM data.",
+  "rule_count": 13,
+  "tools": ["samtools", "deeptools", "pygenometracks", "gtracks", "sinto", "igv-reports"],
+  "description": "Merge BAM files per experimental group with samtools, compute normalized bigWig coverage with deepTools bamCoverage (RPGC by default), plot isoform-aware per-gene and per-region genome tracks with gtracks/pyGenomeTracks, and publish a UCSC genome browser track hub — end-to-end track generation for RNA-seq, ATAC-seq and other aligned BAM data, plus the single-cell branch (sinto per-cell-barcode splitting of sc BAMs into per-group BAMs) and an opt-in IGV report of all merged BAMs over the annotated gene regions.",
   "installation": {
     "engine": "oxo-flow >= 0.12.0",
     "toolchain": "conda envs — pinned",
@@ -32,9 +29,10 @@
       "sample annotation CSV with a group column (sample_annotation; group values drive merge/coverage/hub fan-out)",
       "gene list CSV with gene_region,ymax columns (gene_list; gene symbols or chr:start-end regions)",
       "12-column genome BED for gene annotation (genome_bed, e.g. ref.bed.gz); no genome FASTA or annotation GTF required",
-      "compute: up to 4 CPUs / 4 GB per rule (samtools merge and bamCoverage at threads=4/4000M); helper rules need 1 CPU / 1 GB",
-      "conda/mamba to build the pinned environment (samtools 1.19.2, deepTools 3.5.5, pyGenomeTracks 3.8, python 3.10.13, gtracks 1.12.6); helper rules need only a system python3",
-      "disk: results/ for merged BAMs, bigWigs, track plots and the UCSC hub"
+      "single-cell samples (optional): one CB-tagged BAM per sc sample at <sc_bam_dir>/<sc_id>.bam + a 2-column barcode TSV (barcode<TAB>group, no header) at <sc_metadata>/<sc_id>.tsv; group values of TSV col 2 must be declared in config.sc_groups and [[values]] sc_group",
+      "compute: up to 4 CPUs / 4 GB per rule (samtools merge, bamCoverage and sinto filterbarcodes at threads=4/4000M); helper rules need 1 CPU / 1 GB; igv_report is fixed at the upstream 8000 MB minimum",
+      "conda/mamba to build the pinned environments (samtools 1.19.2, deepTools 3.5.5, pyGenomeTracks 3.8, python 3.10.13, gtracks 1.12.6, sinto 0.10.0; igv-reports 1.14.1 / python 3.8 / pysam 0.22.0 for the opt-in IGV report); helper rules need only a system python3",
+      "disk: results/ for merged BAMs, bigWigs, track plots, the UCSC hub and the IGV report"
     ]
   },
   "repo_url": "https://github.com/oxo-flow-community/oxo-flow-genome-tracks",

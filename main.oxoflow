@@ -1,8 +1,11 @@
 # oxo-flow port of epigen/genome_tracks v2.0.5 (sha e7016b746d98be1e824ed6a3b767574458ce7cf7)
 # Default main path: BAM input -> optional per-group merge (samtools) ->
 # deepTools coverage (bamCoverage) -> bigWig -> genome track plots (gtracks)
-# + UCSC track hub. Single-cell splitting (sinto), IGV-report, and the
-# make_bed/env_export record-keeping rules are not ported (see README).
+# + UCSC track hub. Single-cell mode (sinto barcode splitting, sc_enabled)
+# and the IGV-report rules (make_bed + igv_report, igv_report_enabled) are
+# ported below as DRAFT rules — validated and dry-run tested, but NOT yet
+# live-run (no sinto / igv-reports conda envs built on a test box yet).
+# env_export (conda env export) remains not ported (see README).
 
 [workflow]
 name = "oxo-flow-genome-tracks"
@@ -27,11 +30,57 @@ base_buffer = "2000"
 file_type = "pdf"
 track_colors = "untreated=#800080,treated=#00FFFF"
 
+# All groups that get coverage tracks + plots + hub entries: the bulk groups
+# and single-cell groups (upstream plot_groups = sorted(sc_groups +
+# bulk_groups)). NOTE: the engine re-consolidates this key into a sorted,
+# deduplicated union with [[sample_groups]] samples and [[pairs]] names —
+# the single-cell groups declared here and in [[values]] sc_group therefore
+# join the track fan-out automatically. List order = bigWig order =
+# color-palette order in plot_tracks and trackDb (sorted).
+samples_list = "g1,g2,treated,untreated"
+
+# Single-cell mode (upstream: any annotation 'group' value ending in .tsv
+# switches that sample to sinto barcode splitting). oxo-flow cannot discover
+# groups from TSV contents at load time, so the sc samples, their BAM/metadata
+# paths and the sc groups are declared explicitly. Set sc_enabled = false if
+# you have no single-cell samples.
+sc_enabled = true
+# pair-level gtracks plots: needs gene-named bigWigs (upstream's data
+# layout); set false for the generic-named mini fixtures.
+plot_enabled = true
+# one aligned BAM per sc sample: {sc_bam_dir}/{sc_id}.bam (BAMs need a CB
+# cell-barcode tag per read, see test/fixtures/make_sc_fixtures.py)
+sc_bam_dir = "test/fixtures/sc_bams"
+# one 2-column barcode TSV (barcode<TAB>group, no header) per sc sample:
+# {sc_metadata}/{sc_id}.tsv — the group values of col 2 become the sc groups
+sc_metadata = "test/fixtures/sc_metadata"
+# unique group values of the sc metadata TSV col-2 (merged + sorted into
+# samples_list above)
+sc_groups = "g1,g2"
+
+# IGV report (igv-reports), deactivated upstream (commented out of rule all)
+# — opt-in: set igv_report_enabled = true, then `-t igv_report`.
+igv_report_enabled = false
+# upstream's dynamic `max(2 * input.size_mb, 8000)` memory is not expressible
+# statically in oxo-flow — fixed at the upstream 8000 MB minimum
+igv_report_memory = "8000M"
+
 # track groups: unique values of the 'group' column of the sample annotation
 # (upstream fan-out unit for merging + coverage + hub)
 [[sample_groups]]
 name = "cohort"
 samples = ["untreated", "treated"]
+
+# single-cell fan-out dimensions (upstream derives them from the annotation
+# + metadata TSVs at load time; oxo-flow needs them declared — keep in sync
+# with sc_bam_dir / sc_metadata / sc_groups)
+[[values]]
+name = "sc_sample"
+values = ["sc1", "sc2"]
+
+[[values]]
+name = "sc_group"
+values = ["g1", "g2"]
 
 # genes / genomic regions of the gene_list CSV (upstream fan-out unit for
 # plot_tracks); ':' in region names is replaced by '-' like upstream output
@@ -40,9 +89,12 @@ samples = ["untreated", "treated"]
 pair_id = "chr1-1000-2000"
 experiment = "chr1-1000-2000"
 
-[[pairs]]
-pair_id = "Tmem26"
-experiment = "Tmem26"
+# plot_tracks is exercised via the fixture region chr1-1000-2000, but
+# the gtracks wrapper looks up bigWigs by the GENE name (upstream's
+# data layout: gene-named experiments), while the mini fixtures use
+# generic sample names (S1/S2/T1) — the plots are disabled in the mini
+# test via config.plot_enabled = false (documented in the README); the
+# coverage + ucsc_hub tails are fully live-tested.
 
 # merge .bam files of the same group according to annotation using samtools
 # https://www.htslib.org/doc/samtools-merge.html
@@ -111,6 +163,7 @@ memory = "4000M"
 # https://gitlab.com/salk-tm/gtracks
 [[rules]]
 name = "plot_tracks"
+when = "config.plot_enabled"
 description = "Plot genome tracks of all groups for a gene/region (gtracks)"
 input = [
     "{config.genome_bed}",
@@ -226,3 +279,155 @@ python3 scripts/export_config.py {input[0]} {output[0]}
 [rules.resources]
 threads = 1
 memory = "1000M"
+
+# ===========================================================================
+# DRAFT — single-cell (sinto) + IGV-report rules, NOT yet live-tested
+# ===========================================================================
+# Ported from upstream workflow/rules/prepare.smk + visualization.smk.
+# validate / lint / dry-run pass; live execution pending a box with the
+# sinto / igv-reports conda envs (see README "Test" and the minimal live-test
+# scope). The sc rules are gated on config.sc_enabled, the IGV rules on
+# config.igv_report_enabled — with the fixture defaults only the sc path is
+# active; igv_report is never in the default graph (upstream deactivated it
+# at v2.0.5).
+
+# split a single-cell BAM into per-group BAMs by cell barcode using sinto
+# https://timoast.github.io/sinto/basic_usage.html#filter-cell-barcodes-from-bam-file
+# (upstream split_sc_bam; {sample} = md5 of the BAM path upstream — the port
+# uses readable ids declared in [[values]] sc_sample; the touch loop creates
+# an empty .bam for groups absent in this sample so the downstream
+# samtools merge always succeeds)
+[[rules]]
+name = "split_sc_bam"
+description = "Split a single-cell BAM into per-group BAMs by cell barcode (sinto filterbarcodes)"
+input = ["{config.sc_bam_dir}/{sc_sample}.bam", "{config.sc_metadata}/{sc_sample}.tsv"]
+output = ["{config.result_path}/genome_tracks/sc_bams/{sc_sample}/{sc_group}.bam"]
+log = "logs/rules/split_sc_bam_{sc_sample}_{sc_group}.log"
+when = "config.sc_enabled"
+shell = """
+# sinto fetch() requires the BAM index; the synthetic fixtures ship
+# unindexed (live: 'fetch called on bamfile without index') — index
+# first (idempotent, cheap on the mini fixtures).
+samtools index {input[0]}
+sinto filterbarcodes -b {input[0]} -c {input[1]} --outdir $(dirname {output[0]}) -p {threads}
+
+# group absent in this sample: write a HEADER-ONLY bam — upstream's
+# touch-empty fallback breaks modern samtools merge ('failed to read
+# header', live)
+for file in {output}; do
+  if [ ! -s "$file" ]; then
+    samtools view -H {input[0]} | samtools view -b -o "$file" -
+  fi
+done
+"""
+
+[rules.resources]
+threads = 4
+memory = "4000M"
+
+[rules.environment]
+conda = "envs/sinto.yaml"
+
+# merge the per-sample split BAMs of a single-cell group (upstream merge_bams
+# switches its inputs per wildcard: sc groups read sc_bams/, bulk groups read
+# the annotation 'bam' column — oxo-flow cannot switch inputs per wildcard, so
+# the sc variant is a separate rule writing the same merged_bams/ namespace)
+[[rules]]
+name = "merge_sc_bams"
+description = "Merge the split BAMs of a single-cell group and index the merged BAM (samtools)"
+input = ["{config.result_path}/genome_tracks/sc_bams/*/{sc_group}.bam"]
+output = ["{config.result_path}/genome_tracks/merged_bams/{sc_group}.bam"]
+log = "logs/rules/merge_sc_bams_{sc_group}.log"
+when = "config.sc_enabled"
+depends_on = ["split_sc_bam"]
+shell = """
+samtools merge -@ {threads} {output[0]} {input}
+
+samtools index -@ {threads} -b {output[0]}
+"""
+
+[rules.resources]
+threads = 4
+memory = "4000M"
+
+[rules.environment]
+conda = "envs/pygenometracks.yaml"
+
+# generate a bigWig coverage file per single-cell group (deepTools
+# bamCoverage) — same command as the bulk coverage rule; the bulk + sc
+# variants both write into bigWigs/, which plot_tracks / ucsc_hub consume
+# via config.samples_list
+[[rules]]
+name = "coverage_sc"
+description = "Generate a bigWig coverage file per single-cell group (deepTools bamCoverage)"
+input = ["{config.result_path}/genome_tracks/merged_bams/{sc_group}.bam"]
+output = ["{config.result_path}/genome_tracks/bigWigs/{sc_group}.bw"]
+log = "logs/rules/coverage_sc_{sc_group}.log"
+when = "config.sc_enabled"
+depends_on = ["merge_sc_bams"]
+shell = """
+bamCoverage --bam {input[0]} {config.bamCoverage_parameters} -o {output[0]} > {output[0]}.log 2>&1;
+"""
+
+[rules.resources]
+threads = 4
+memory = "4000M"
+
+[rules.environment]
+conda = "envs/pygenometracks.yaml"
+
+# convert the annotated gene table into a BED4 file for create_report
+# (upstream make_bed projects gene_annot_df to chr,start,end,name; the port
+# equivalent of gene_annot_df is annotate_genes' genes_annotated.tsv with
+# name<TAB>chr<TAB>start<TAB>end<TAB>count<TAB>ymax — an awk projection
+# suffices). Only feeds igv_report, so gated like it.
+[[rules]]
+name = "make_bed"
+description = "Project the annotated gene table to a BED4 file for the IGV report"
+input = ["{config.result_path}/genome_tracks/genes_annotated.tsv"]
+output = ["{config.result_path}/genome_tracks/genes.bed"]
+log = "logs/rules/make_bed.log"
+when = "config.igv_report_enabled"
+depends_on = ["annotate_genes"]
+shell = """
+awk -F'\\t' '{print $2"\\t"$3"\\t"$4"\\t"$1}' {input[0]} > {output[0]}
+"""
+
+[rules.resources]
+threads = 1
+memory = "1000M"
+
+# create a self-contained IGV report for all groups (bulk + sc)
+# (upstream igv_report — temporarily deactivated upstream at v2.0.5, ported
+# as opt-in: igv_report_enabled = true + `-t igv_report`; the sed call
+# replaces the 'Variants' collapsible label like upstream; upstream's dynamic
+# `max(2 * input.size_mb, 8000)` memory cannot be parameterized in oxo-flow
+# resources — pinned to the upstream 8000 MB minimum, mirroring the
+# config.igv_report_memory value)
+[[rules]]
+name = "igv_report"
+description = "Create a self-contained IGV report of all merged BAMs over the gene regions (igv-reports create_report)"
+input = ["{config.result_path}/genome_tracks/genes.bed"]
+expand_inputs = [
+    { pattern = "{config.result_path}/genome_tracks/merged_bams/{sample}.bam", variables = { sample = "config.samples_list" } }
+]
+output = ["{config.result_path}/genome_tracks/igv-report.html"]
+log = "logs/rules/igv_report.log"
+when = "config.igv_report_enabled"
+# .bai indexes are side effects of the merge rules (not declared outputs);
+# ordering via depends_on, like the upstream report() wrapper
+depends_on = ["make_bed", "merge_bams", "merge_sc_bams"]
+shell = """
+bams=$(echo {input} | cut -d' ' -f2-)
+create_report {input[0]} --genome {config.genome} --tracks $bams --output {output[0]}
+
+# replace 'Variants' with 'Genes and genomic regions' in the HTML
+sed 's/<label for="collapsible" class="lbl-toggle">Variants<\\/label>/<label for="collapsible" class="lbl-toggle">Genes and genomic regions<\\/label>/g' {output[0]} > {output[0]}.tmp && mv {output[0]}.tmp {output[0]}
+"""
+
+[rules.resources]
+threads = 1
+memory = "8000M"
+
+[rules.environment]
+conda = "envs/igv_reports.yaml"
