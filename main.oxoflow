@@ -304,10 +304,12 @@ shell = """
 samtools index {input[0]}
 sinto filterbarcodes -b {input[0]} -c {input[1]} --outdir $(dirname {output[0]}) -p {threads}
 
-# generate empty bam file if group is not present in sample
+# group absent in this sample: write a HEADER-ONLY bam — upstream's
+# touch-empty fallback breaks modern samtools merge ('failed to read
+# header', live)
 for file in {output}; do
-  if [ ! -f "$file" ]; then
-    touch "$file"
+  if [ ! -s "$file" ]; then
+    samtools view -H {input[0]} | samtools view -b -o "$file" -
   fi
 done
 """
