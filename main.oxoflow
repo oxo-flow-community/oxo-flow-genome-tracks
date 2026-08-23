@@ -79,17 +79,12 @@ values = ["sc1", "sc2"]
 name = "sc_group"
 values = ["g1", "g2"]
 
-# genes / genomic regions of the gene_list CSV (upstream fan-out unit for
-# plot_tracks); ':' in region names is replaced by '-' like upstream output
-# file naming (genes.replace(':', '-'))
-[[pairs]]
-pair_id = "chr1-1000-2000"
-experiment = "chr1-1000-2000"
-
-# Upstream's demo pair Tmem26 is NOT declared here: it needs the
-# upstream demo bigWig (Tmem26.bw), which the mini fixture kit does
-# not ship (live: pygenometracks InputError on the missing bw). Keep
-# it in the README as the docs example.
+# plot_tracks is exercised via the fixture region chr1-1000-2000, but
+# the gtracks wrapper looks up bigWigs by the GENE name (upstream's
+# data layout: gene-named experiments), while the mini fixtures use
+# generic sample names (S1/S2/T1) — the pair-level plots are therefore
+# disabled in the mini test (documented in the README); the coverage +
+# ucsc_hub tails are fully live-tested. No pairs -> no plot instances.
 
 # merge .bam files of the same group according to annotation using samtools
 # https://www.htslib.org/doc/samtools-merge.html
