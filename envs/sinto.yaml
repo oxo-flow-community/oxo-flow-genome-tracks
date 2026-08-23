@@ -5,3 +5,8 @@ channels:
   - nodefaults
 dependencies:
   - sinto=0.10.0
+  # sinto imports pkg_resources (setuptools >=81 removed it, live) and
+  # the split rule indexes the fixture BAMs first (live: 'fetch called
+  # on bamfile without index').
+  - setuptools <81
+  - samtools

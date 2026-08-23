@@ -298,6 +298,10 @@ output = ["{config.result_path}/genome_tracks/sc_bams/{sc_sample}/{sc_group}.bam
 log = "logs/rules/split_sc_bam_{sc_sample}_{sc_group}.log"
 when = "config.sc_enabled"
 shell = """
+# sinto fetch() requires the BAM index; the synthetic fixtures ship
+# unindexed (live: 'fetch called on bamfile without index') — index
+# first (idempotent, cheap on the mini fixtures).
+samtools index {input[0]}
 sinto filterbarcodes -b {input[0]} -c {input[1]} --outdir $(dirname {output[0]}) -p {threads}
 
 # generate empty bam file if group is not present in sample
