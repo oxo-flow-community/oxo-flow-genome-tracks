@@ -86,9 +86,10 @@ values = ["g1", "g2"]
 pair_id = "chr1-1000-2000"
 experiment = "chr1-1000-2000"
 
-[[pairs]]
-pair_id = "Tmem26"
-experiment = "Tmem26"
+# Upstream's demo pair Tmem26 is NOT declared here: it needs the
+# upstream demo bigWig (Tmem26.bw), which the mini fixture kit does
+# not ship (live: pygenometracks InputError on the missing bw). Keep
+# it in the README as the docs example.
 
 # merge .bam files of the same group according to annotation using samtools
 # https://www.htslib.org/doc/samtools-merge.html
