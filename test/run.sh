@@ -27,10 +27,19 @@ echo "==> dry-run: IGV rules deactivated by default (upstream parity)"
 grep -q "make_bed  \[skip: when condition false\]" /tmp/oxo-dryrun-$$.txt || { echo "make_bed not skipped by default"; exit 1; }
 grep -q "igv_report  \[skip: when condition false\]" /tmp/oxo-dryrun-$$.txt || { echo "igv_report not skipped by default"; exit 1; }
 
+echo "==> dry-run: env_export rules skipped by default (opt-in, default graph unchanged)"
+for inst in env_export_pygenometracks env_export_sinto env_export_igv_reports; do
+  grep -q "$inst  \[skip: when condition false\]" /tmp/oxo-dryrun-$$.txt || { echo "$inst not skipped by default"; exit 1; }
+done
+
 echo "==> dry-run: IGV path opt-in (igv_report_enabled = true, -t igv_report)"
 "$OXO" dry-run main.oxoflow -t igv_report igv_report_enabled=true > /tmp/oxo-igv-dryrun-$$.txt 2>&1
 grep -q "make_bed  \[run:" /tmp/oxo-igv-dryrun-$$.txt || { echo "make_bed not in igv run"; exit 1; }
 grep -q "igv_report  \[run:" /tmp/oxo-igv-dryrun-$$.txt || { echo "igv_report not in igv run"; exit 1; }
+
+echo "==> dry-run: env_export path opt-in (env_export_enabled = true, -t env_export_pygenometracks)"
+"$OXO" dry-run main.oxoflow -t env_export_pygenometracks env_export_enabled=true > /tmp/oxo-env-dryrun-$$.txt 2>&1
+grep -q "env_export_pygenometracks  \[run:" /tmp/oxo-env-dryrun-$$.txt || { echo "env_export_pygenometracks not in env run"; exit 1; }
 
 echo "==> debug: expanded commands contain no literal {wildcards}"
 "$OXO" debug main.oxoflow > /tmp/oxo-debug-$$.txt 2>&1
@@ -43,7 +52,8 @@ for inst in merge_bams_cohort_untreated merge_bams_cohort_treated \
             split_sc_bam_sc_sample_sc1_sc_group_g1 split_sc_bam_sc_sample_sc2_sc_group_g2 \
             merge_sc_bams_sc_group_g1 merge_sc_bams_sc_group_g2 \
             coverage_sc_sc_group_g1 coverage_sc_sc_group_g2 \
-            annotate_genes annot_export gene_list_export config_export; do
+            annotate_genes annot_export gene_list_export config_export \
+            env_export_pygenometracks env_export_sinto env_export_igv_reports; do
   grep -q "$inst" /tmp/oxo-debug-$$.txt || { echo "missing instance: $inst"; exit 1; }
 done
 

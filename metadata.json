@@ -14,13 +14,11 @@
   "created": "2026-08-15",
   "domain": "genomics",
   "tags": ["epigenomics", "genome-tracks", "bigwig", "coverage", "visualization", "ucsc-hub", "deeptools", "pygenometracks", "snakemake", "single-cell", "sinto", "igv"],
-  "scope": ["merge_bams", "coverage", "annotate_genes", "plot_tracks", "ucsc_hub", "split_sc_bam", "merge_sc_bams", "coverage_sc", "make_bed", "igv_report", "annot_export", "gene_list_export", "config_export"],
-  "excluded": [
-    "env_export — conda-runtime documentation rule; the checked-in envs/*.yaml for the pygenometracks/sinto/igv_reports branches serve the same reproducibility role"
-  ],
-  "rule_count": 13,
+  "scope": ["merge_bams", "coverage", "annotate_genes", "plot_tracks", "ucsc_hub", "split_sc_bam", "merge_sc_bams", "coverage_sc", "make_bed", "igv_report", "annot_export", "gene_list_export", "config_export", "env_export_pygenometracks", "env_export_sinto", "env_export_igv_reports"],
+  "excluded": [],
+  "rule_count": 16,
   "tools": ["samtools", "deeptools", "pygenometracks", "gtracks", "sinto", "igv-reports"],
-  "description": "Merge BAM files per experimental group with samtools, compute normalized bigWig coverage with deepTools bamCoverage (RPGC by default), plot isoform-aware per-gene and per-region genome tracks with gtracks/pyGenomeTracks, and publish a UCSC genome browser track hub — end-to-end track generation for RNA-seq, ATAC-seq and other aligned BAM data, plus the single-cell branch (sinto per-cell-barcode splitting of sc BAMs into per-group BAMs) and an opt-in IGV report of all merged BAMs over the annotated gene regions.",
+  "description": "Merge BAM files per experimental group with samtools, compute normalized bigWig coverage with deepTools bamCoverage (RPGC by default), plot isoform-aware per-gene and per-region genome tracks with gtracks/pyGenomeTracks, and publish a UCSC genome browser track hub — end-to-end track generation for RNA-seq, ATAC-seq and other aligned BAM data, plus the single-cell branch (sinto per-cell-barcode splitting of sc BAMs into per-group BAMs), an opt-in IGV report of all merged BAMs over the annotated gene regions, and opt-in conda environment export rules (env_export_*, conda env export).",
   "installation": {
     "engine": "oxo-flow >= 0.12.0",
     "toolchain": "conda envs — pinned",

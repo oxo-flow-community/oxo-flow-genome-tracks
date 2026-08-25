@@ -1,11 +1,11 @@
 # oxo-flow port of epigen/genome_tracks v2.0.5 (sha e7016b746d98be1e824ed6a3b767574458ce7cf7)
 # Default main path: BAM input -> optional per-group merge (samtools) ->
 # deepTools coverage (bamCoverage) -> bigWig -> genome track plots (gtracks)
-# + UCSC track hub. Single-cell mode (sinto barcode splitting, sc_enabled)
-# and the IGV-report rules (make_bed + igv_report, igv_report_enabled) are
+# + UCSC track hub. Single-cell mode (sinto barcode splitting, sc_enabled),
+# the IGV-report rules (make_bed + igv_report, igv_report_enabled) and the
+# conda-env documentation rules (env_export_*, env_export_enabled) are
 # ported below as DRAFT rules — validated and dry-run tested, but NOT yet
 # live-run (no sinto / igv-reports conda envs built on a test box yet).
-# env_export (conda env export) remains not ported (see README).
 
 [workflow]
 name = "oxo-flow-genome-tracks"
@@ -64,6 +64,12 @@ igv_report_enabled = false
 # upstream's dynamic `max(2 * input.size_mb, 8000)` memory is not expressible
 # statically in oxo-flow — fixed at the upstream 8000 MB minimum
 igv_report_memory = "8000M"
+
+# export the built conda environments as results/genome_tracks/envs/*.yaml
+# (upstream 'env_export' runs in rule all; the port keeps it opt-in so the
+# default graph is unchanged — the checked-in envs/*.yaml already document
+# the pinned versions; see README "Fidelity")
+env_export_enabled = false
 
 # track groups: unique values of the 'group' column of the sample annotation
 # (upstream fan-out unit for merging + coverage + hub)
@@ -428,6 +434,75 @@ sed 's/<label for="collapsible" class="lbl-toggle">Variants<\\/label>/<label for
 [rules.resources]
 threads = 1
 memory = "8000M"
+
+[rules.environment]
+conda = "envs/igv_reports.yaml"
+
+# ===========================================================================
+# DRAFT — conda environment documentation rules (env_export)
+# ===========================================================================
+# Port of upstream workflow/rules/envs_export.smk 'env_export', one instance
+# per conda env (upstream fans {env} over pygenometracks/igv_reports/sinto;
+# oxo-flow cannot wildcard [rules.environment], so each env is its own rule).
+# Upstream runs env_export in rule all; the port gates it on
+# config.env_export_enabled (default off) so the default graph is unchanged
+# — the checked-in envs/*.yaml serve the same reproducibility role. Each
+# rule exports its OWN activated env (the upstream shell `conda env export`
+# verbatim — inside the engine's `conda run -n <env>` wrapper this exports
+# exactly that env, verified live with conda 26.1.1), and the engine
+# guarantees the env exists before the rule runs. Requires the conda runtime
+# (already a port requirement); DRAFT — not yet live-run with the real envs.
+
+# document the exact resolved pygenometracks environment
+[[rules]]
+name = "env_export_pygenometracks"
+description = "Export the built pygenometracks conda environment to document exact versions (conda env export)"
+output = ["{config.result_path}/genome_tracks/envs/pygenometracks.yaml"]
+log = "logs/rules/env_export_pygenometracks.log"
+when = "config.env_export_enabled"
+shell = """
+conda env export > {output}
+"""
+
+[rules.resources]
+threads = 1
+memory = "4000M"
+
+[rules.environment]
+conda = "envs/pygenometracks.yaml"
+
+# document the exact resolved sinto environment
+[[rules]]
+name = "env_export_sinto"
+description = "Export the built sinto conda environment to document exact versions (conda env export)"
+output = ["{config.result_path}/genome_tracks/envs/sinto.yaml"]
+log = "logs/rules/env_export_sinto.log"
+when = "config.env_export_enabled"
+shell = """
+conda env export > {output}
+"""
+
+[rules.resources]
+threads = 1
+memory = "4000M"
+
+[rules.environment]
+conda = "envs/sinto.yaml"
+
+# document the exact resolved igv_reports environment
+[[rules]]
+name = "env_export_igv_reports"
+description = "Export the built igv_reports conda environment to document exact versions (conda env export)"
+output = ["{config.result_path}/genome_tracks/envs/igv_reports.yaml"]
+log = "logs/rules/env_export_igv_reports.log"
+when = "config.env_export_enabled"
+shell = """
+conda env export > {output}
+"""
+
+[rules.resources]
+threads = 1
+memory = "4000M"
 
 [rules.environment]
 conda = "envs/igv_reports.yaml"

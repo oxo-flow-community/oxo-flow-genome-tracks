@@ -15,7 +15,7 @@ pyGenomeTracks; and a UCSC genome browser track hub is generated so all tracks
 can be shared online. You get merged, indexed BAMs, bigWig coverage files,
 per-gene/per-region track plots, and a UCSC track hub.
 
-Two additional modes are ported (upstream v2.0.5 parity):
+Additional modes are ported (upstream v2.0.5 parity):
 - **Single-cell mode** (`sc_enabled`, on by default): sc samples are declared
   with a BAM + 2-column barcode TSV (`sc_bam_dir` / `sc_metadata`); sinto
   `filterbarcodes` splits each sc BAM per cell-barcode group, the per-group
@@ -26,6 +26,17 @@ Two additional modes are ported (upstream v2.0.5 parity):
   of all merged BAMs (bulk + sc) over the annotated gene regions with
   igv-reports `create_report`. Never in the default graph; opt in with
   `igv_report_enabled = true` and `-t igv_report`.
+- **Conda env export** (`env_export_enabled`, off by default — upstream runs
+  `env_export` in `rule all`, the port keeps it opt-in so the default graph is
+  unchanged): `env_export_pygenometracks` / `env_export_sinto` /
+  `env_export_igv_reports` run the upstream `conda env export` shell verbatim
+  inside the env each rule declares, writing the resolved environment
+  (versions + builds) to `results/genome_tracks/envs/*.yaml`. The checked-in
+  `envs/*.yaml` serve the same reproducibility role, so these rules are
+  documentation-only; they need the conda runtime (already a port
+  requirement) and the envs built (guaranteed by the engine for the env each
+  rule declares). DRAFT — mechanics live-verified with conda 26.1.1, the
+  three real env builds not yet run.
 
 ## Installation
 
@@ -112,6 +123,9 @@ oxo-flow run main.oxoflow -t plot_tracks
 oxo-flow run main.oxoflow -t coverage_sc
 # 7. IGV report (opt-in, deactivated by default like upstream)
 oxo-flow run main.oxoflow -t igv_report igv_report_enabled=true
+# 8. conda env export docs (opt-in, off by default — upstream runs env_export
+#    in rule all; the checked-in envs/*.yaml serve the same role)
+oxo-flow run main.oxoflow -t env_export_pygenometracks env_export_enabled=true
 ```
 
 Results land under `results/genome_tracks/`: `merged_bams/` (bulk + sc),
@@ -125,7 +139,9 @@ Configuration: all settings live in the `[config]` table of `main.oxoflow` —
 `track_colors` (comma-joined `group=#hex`, `#000000` default), `x_axis`,
 `width`, `base_buffer`, `file_type`; single-cell keys `sc_enabled`,
 `sc_bam_dir`, `sc_metadata`, `sc_groups`; IGV keys `igv_report_enabled`,
-`igv_report_memory` (informational mirror of the rule's fixed 8000M).
+`igv_report_memory` (informational mirror of the rule's fixed 8000M);
+env-export key `env_export_enabled` (opt-in, default off — the three
+`env_export_*` rules write `results/genome_tracks/envs/*.yaml`).
 Group fan-out is declared in `[[sample_groups]]` (bulk) and `[[values]]`
 `sc_sample` × `sc_group` (single-cell), per-gene fan-out in `[[pairs]]`;
 keep the annotation CSV, gene list, genome BED, metadata TSVs and BAMs in
@@ -153,7 +169,7 @@ Created 2026-08-15; this workflow may lag behind upstream releases. See
 | Snakefile load-time gene annotation (`parse_gene`/`parse_region`, `gene_annot_df`) | `annotate_genes` | python3 (stdlib) | new single-instance rule; same algorithm (BED scan, min start / max end across isoforms, `base_buffer` extension for genes, no buffer for `chr:start-end` regions, `genes_not_found.csv`, `:`→`-` name replacement); upstream computes it in the Snakemake base env (numpy/pandas) — the port script uses only stdlib, so the upstream `global.yaml` env is not needed |
 | `plot_tracks` | `plot_tracks` | gtracks 1.12.6, pyGenomeTracks 3.8 | identical `gtracks` invocation (coordinates, `--genes`, optional `--max ymax`, `--gene-rows`/`--genes-height` = isoform count, `--x-axis`, `--width`, `--color-palette` with `#000000` default); per-gene fan-out uses `[[pairs]]` `pair_id` (oxo-flow has no gene wildcard source); `depends_on = ["coverage"]` added because `expand_inputs` input lists do not form DAG edges in oxo-flow 0.12.0 |
 | `ucsc_hub` | `ucsc_hub` | python3 (stdlib) | identical hub content (hub.txt, genomes.txt, trackDb.txt with hex→RGB colors, `../{group}.bw` relative symlinks) ported from the Python run block to `scripts/ucsc_hub.py`; the per-group symlinks are side effects (outputs declared only for the three text files) |
-| `env_export` | not ported | — | upstream requests `conda env export` for the pygenometracks/igv_reports/sinto envs; needs a conda runtime — the checked-in `envs/*.yaml` for all three branches serve the same reproducibility role |
+| `env_export` | `env_export_pygenometracks` / `env_export_sinto` / `env_export_igv_reports` | conda | upstream fans `{env}` over the three envs; oxo-flow cannot wildcard `[rules.environment]`, so one rule per env — identical `conda env export` shell, each rule exports its own activated env (the engine's `conda run -n <env>` wrapper + `conda env export` = the upstream semantics, verified live with conda 26.1.1). Upstream runs it in `rule all`; the port gates it on `env_export_enabled` (default off) so the default graph is unchanged — the checked-in `envs/*.yaml` serve the same reproducibility role. DRAFT (mechanics live-verified; the three real env builds not yet run) |
 | `config_export` | `config_export` | python3 (stdlib) | `json.dump(config)` equivalent: `scripts/export_config.py` dumps the workflow's `[config]` table |
 | `annot_export` | `annot_export` | cp | identical (`cp` of the annotation CSV) |
 | `gene_list_export` | `gene_list_export` | cp | identical (`cp` of the gene list CSV) |
@@ -173,7 +189,10 @@ keys with upstream defaults, except `result_path` (placeholder path →
 `sc_bam_dir`, `sc_metadata` (directory keys — oxo-flow rule inputs cannot
 index comma-joined config lists), `sc_groups` (merged + sorted into
 `samples_list`), `igv_report_enabled`, `igv_report_memory` (documented mirror;
-the rule's `memory` is the fixed upstream minimum). Group fan-out uses
+the rule's `memory` is the fixed upstream minimum), `env_export_enabled`
+(opt-in, default off — upstream runs `env_export` in `rule all`; the checked-in
+`envs/*.yaml` serve the same reproducibility role, so the port keeps the
+default graph unchanged). Group fan-out uses
 `[[sample_groups]]` (one `{sample}` per annotation group) + `[[values]]`
 `sc_sample` × `sc_group`, gene fan-out uses `[[pairs]]`. Sample annotation,
 gene list, genome BED, metadata TSVs and BAM files must be kept in sync with
@@ -190,12 +209,13 @@ Runs `validate` + `lint` (warnings acceptable, errors not) + `dry-run` +
 a debug-instance check against `main.oxoflow`, including the single-cell
 path (all `split_sc_bam`/`merge_sc_bams`/`coverage_sc` instances in the
 default dry-run, `make_bed` + `igv_report` asserted to skip until
-`igv_report_enabled = true` + `-t igv_report` brings them in) and the IGV
-shell rendering. Expects `oxo-flow` on `PATH` (or set
-`OXO=/path/to/oxo-flow`); CI runs the same script on every push.
+`igv_report_enabled = true` + `-t igv_report` brings them in), the IGV
+shell rendering, and the `env_export_*` rules (skipped by default,
+running with `env_export_enabled = true`). Expects `oxo-flow` on `PATH`
+(or set `OXO=/path/to/oxo-flow`); CI runs the same script on every push.
 
-The sc + IGV rules are DRAFT: `validate`/`lint`/`dry-run` and the generated
-fixture BAMs (test/fixtures/sc_bams/*.bam, generated by
+The sc + IGV + env_export rules are DRAFT: `validate`/`lint`/`dry-run` and
+the generated fixture BAMs (test/fixtures/sc_bams/*.bam, generated by
 `test/fixtures/make_sc_fixtures.py` — stdlib-only, verified with pysam +
 htslib index build) pass, but the sinto / igv-reports conda envs have not
 been built and run live yet. Minimal live scope: on a Linux box with conda,
@@ -205,7 +225,9 @@ envs/pygenometracks.yaml`, then `oxo-flow run main.oxoflow -t coverage_sc`
 BAMs have it); for the IGV report, additionally `conda env create -f
 envs/igv_reports.yaml` and `oxo-flow run main.oxoflow -t igv_report
 igv_report_enabled=true` (verify the `Variants`→`Genes and genomic regions`
-label swap in the HTML).
+label swap in the HTML); for env_export, `oxo-flow run main.oxoflow -t
+env_export_pygenometracks env_export_enabled=true` (verify the resolved
+YAML lands in `results/genome_tracks/envs/`).
 
 ## License
 
