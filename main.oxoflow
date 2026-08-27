@@ -1,11 +1,13 @@
 # oxo-flow port of epigen/genome_tracks v2.0.5 (sha e7016b746d98be1e824ed6a3b767574458ce7cf7)
 # Default main path: BAM input -> optional per-group merge (samtools) ->
 # deepTools coverage (bamCoverage) -> bigWig -> genome track plots (gtracks)
-# + UCSC track hub. Single-cell mode (sinto barcode splitting, sc_enabled),
-# the IGV-report rules (make_bed + igv_report, igv_report_enabled) and the
+# + UCSC track hub. Single-cell mode (sinto barcode splitting, sc_enabled)
+# is ported and live-verified (2026-08-23, tx-ubuntu, exit 0; the tree that
+# became main via PR #2 — see the site audit docs/about/audits/genome-tracks-2026-08.md).
+# The IGV-report rules (make_bed + igv_report, igv_report_enabled) and the
 # conda-env documentation rules (env_export_*, env_export_enabled) are
-# ported below as DRAFT rules — validated and dry-run tested, but NOT yet
-# live-run (no sinto / igv-reports conda envs built on a test box yet).
+# ported below as DRAFT rules — validated and dry-run tested, but not yet
+# run with the real igv-reports env / built conda envs.
 
 [workflow]
 name = "oxo-flow-genome-tracks"
@@ -287,15 +289,17 @@ threads = 1
 memory = "1000M"
 
 # ===========================================================================
-# DRAFT — single-cell (sinto) + IGV-report rules, NOT yet live-tested
+# Single-cell (sinto) + IGV-report rules
 # ===========================================================================
 # Ported from upstream workflow/rules/prepare.smk + visualization.smk.
-# validate / lint / dry-run pass; live execution pending a box with the
-# sinto / igv-reports conda envs (see README "Test" and the minimal live-test
-# scope). The sc rules are gated on config.sc_enabled, the IGV rules on
-# config.igv_report_enabled — with the fixture defaults only the sc path is
-# active; igv_report is never in the default graph (upstream deactivated it
-# at v2.0.5).
+# The sc rules (split_sc_bam / merge_sc_bams / coverage_sc) are
+# live-verified: the full sc chain ran exit 0 on tx-ubuntu on 2026-08-23
+# (see README "Test" and the site audit docs/about/audits/genome-tracks-2026-08.md).
+# The IGV rules (make_bed + igv_report) remain DRAFT — the igv-reports
+# conda env has not been built yet. The sc rules are gated on
+# config.sc_enabled, the IGV rules on config.igv_report_enabled — with the
+# fixture defaults only the sc path is active; igv_report is never in the
+# default graph (upstream deactivated it at v2.0.5).
 
 # split a single-cell BAM into per-group BAMs by cell barcode using sinto
 # https://timoast.github.io/sinto/basic_usage.html#filter-cell-barcodes-from-bam-file

@@ -1,6 +1,6 @@
 # oxo-flow-genome-tracks — Genome browser tracks: coverage, gene plots and UCSC hub
 
-> ★ Verified · ⇄ Official port of [`epigen/genome_tracks`](https://github.com/epigen/genome_tracks) @ `v2.0.5` — same tools, same versions, same commands. Part of the [oxo-flow-community catalog](https://oxo-flow-community.github.io/).
+> ★ Verified · ⇄ Official port of [`epigen/genome_tracks`](https://github.com/epigen/genome_tracks) @ `v2.0.5` — same tools, same versions, same commands. Part of the [oxo-flow-community catalog](https://oxo-flow-community.github.io/); see the [site audit](https://oxo-flow-community.github.io/about/audits/genome-tracks-2026-08/).
 
 [![CI](https://github.com/oxo-flow-community/oxo-flow-genome-tracks/actions/workflows/ci.yml/badge.svg)](https://github.com/oxo-flow-community/oxo-flow-genome-tracks/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -16,11 +16,11 @@ can be shared online. You get merged, indexed BAMs, bigWig coverage files,
 per-gene/per-region track plots, and a UCSC track hub.
 
 Additional modes are ported (upstream v2.0.5 parity):
-- **Single-cell mode** (`sc_enabled`, on by default): sc samples are declared
-  with a BAM + 2-column barcode TSV (`sc_bam_dir` / `sc_metadata`); sinto
-  `filterbarcodes` splits each sc BAM per cell-barcode group, the per-group
-  BAMs are merged and covered exactly like bulk groups, and the sc groups join
-  the same plots and hub.
+- **Single-cell mode** (`sc_enabled`, on by default; live-verified
+  2026-08-23): sc samples are declared with a BAM + 2-column barcode TSV
+  (`sc_bam_dir` / `sc_metadata`); sinto `filterbarcodes` splits each sc BAM
+  per cell-barcode group, the per-group BAMs are merged and covered exactly
+  like bulk groups, and the sc groups join the same plots and hub.
 - **IGV report** (`igv_report_enabled`, off by default — deactivated upstream
   at v2.0.5): `make_bed` + `igv_report` build a self-contained `igv-report.html`
   of all merged BAMs (bulk + sc) over the annotated gene regions with
@@ -173,9 +173,9 @@ Created 2026-08-15; this workflow may lag behind upstream releases. See
 | `config_export` | `config_export` | python3 (stdlib) | `json.dump(config)` equivalent: `scripts/export_config.py` dumps the workflow's `[config]` table |
 | `annot_export` | `annot_export` | cp | identical (`cp` of the annotation CSV) |
 | `gene_list_export` | `gene_list_export` | cp | identical (`cp` of the gene list CSV) |
-| `split_sc_bam` | `split_sc_bam` | sinto 0.10.0 | DRAFT (validated, not yet live-run): same `sinto filterbarcodes -b -c --outdir -p` command + upstream's touch-empty-bam fallback for groups absent in a sample; fan-out via `[[values]]` `sc_sample` × `sc_group` (upstream derives them from the metadata TSVs at load time; oxo-flow declares them — keep `[[values]] sc_sample`/`sc_group` in sync with `sc_bam_dir`/`sc_metadata`/`sc_groups`); upstream's `{sample}` = BAM-path md5 is replaced by readable sc ids |
-| `merge_bams` (sc variant) | `merge_sc_bams` | samtools 1.19.2 | DRAFT: upstream switches `merge_bams` inputs per wildcard (sc groups read `sc_bams/`, bulk groups the annotation BAM column); oxo-flow cannot switch inputs per wildcard, so the sc variant is a separate rule writing the same `merged_bams/` namespace, gated on `sc_enabled` |
-| `coverage` (sc variant) | `coverage_sc` | deepTools 3.5.5 | DRAFT: same `bamCoverage` command as bulk `coverage`; sc groups' bigWigs join `plot_tracks`/`ucsc_hub` via `config.samples_list` |
+| `split_sc_bam` | `split_sc_bam` | sinto 0.10.0 | live-verified 2026-08-23 (tx-ubuntu, exit 0 — see the site audit): same `sinto filterbarcodes -b -c --outdir -p` command + upstream's touch-empty-bam fallback for groups absent in a sample (replaced by a header-only-BAM fallback for modern samtools); fan-out via `[[values]]` `sc_sample` × `sc_group` (upstream derives them from the metadata TSVs at load time; oxo-flow declares them — keep `[[values]] sc_sample`/`sc_group` in sync with `sc_bam_dir`/`sc_metadata`/`sc_groups`); upstream's `{sample}` = BAM-path md5 is replaced by readable sc ids |
+| `merge_bams` (sc variant) | `merge_sc_bams` | samtools 1.19.2 | live-verified 2026-08-23: upstream switches `merge_bams` inputs per wildcard (sc groups read `sc_bams/`, bulk groups the annotation BAM column); oxo-flow cannot switch inputs per wildcard, so the sc variant is a separate rule writing the same `merged_bams/` namespace, gated on `sc_enabled` |
+| `coverage` (sc variant) | `coverage_sc` | deepTools 3.5.5 | live-verified 2026-08-23: same `bamCoverage` command as bulk `coverage`; sc groups' bigWigs join `plot_tracks`/`ucsc_hub` via `config.samples_list` |
 | `make_bed` | `make_bed` | awk | DRAFT: upstream projects `gene_annot_df` to `chr,start,end,name` in Python; the port uses an awk projection of `genes_annotated.tsv` (name,chr,start,end → BED4); gated on `igv_report_enabled` like the rule it feeds |
 | `igv_report` | `igv_report` | igv-reports 1.14.1 | DRAFT: **temporarily deactivated upstream** (commented out of `rule all` at v2.0.5), ported as opt-in (`igv_report_enabled = true` + `-t igv_report`); same `create_report --genome --tracks --output` + the upstream `Variants`→`Genes and genomic regions` sed; track list = `config.samples_list` BAMs; memory fixed at the upstream 8000 MB minimum (oxo-flow resources are static) |
 | Snakemake `report()` wrappers | — | — | no equivalent in oxo-flow; the report artifacts are written as plain files |
@@ -214,20 +214,22 @@ shell rendering, and the `env_export_*` rules (skipped by default,
 running with `env_export_enabled = true`). Expects `oxo-flow` on `PATH`
 (or set `OXO=/path/to/oxo-flow`); CI runs the same script on every push.
 
-The sc + IGV + env_export rules are DRAFT: `validate`/`lint`/`dry-run` and
-the generated fixture BAMs (test/fixtures/sc_bams/*.bam, generated by
-`test/fixtures/make_sc_fixtures.py` — stdlib-only, verified with pysam +
-htslib index build) pass, but the sinto / igv-reports conda envs have not
-been built and run live yet. Minimal live scope: on a Linux box with conda,
-`conda env create -f envs/sinto.yaml` + `conda env create -f
-envs/pygenometracks.yaml`, then `oxo-flow run main.oxoflow -t coverage_sc`
-(fixtures already on disk; sinto needs a `CB` tag per read — the generated
-BAMs have it); for the IGV report, additionally `conda env create -f
-envs/igv_reports.yaml` and `oxo-flow run main.oxoflow -t igv_report
-igv_report_enabled=true` (verify the `Variants`→`Genes and genomic regions`
-label swap in the HTML); for env_export, `oxo-flow run main.oxoflow -t
-env_export_pygenometracks env_export_enabled=true` (verify the resolved
-YAML lands in `results/genome_tracks/envs/`).
+Live status (see the [site audit](https://oxo-flow-community.github.io/about/audits/genome-tracks-2026-08/)): the single-cell chain
+(`split_sc_bam` → `merge_sc_bams` → `coverage_sc`) was live-run on
+2026-08-23 on tx-ubuntu — the sinto env built, `coverage_sc` exit 0 with
+the fixture BAMs (fixtures already on disk; sinto needs a `CB` tag per
+read — the generated BAMs have it), and the run's fixes (index fixture
+BAMs, `setuptools <81` + `samtools` pins in the sinto env, header-only-BAM
+fallback, `plot_enabled` gate) landed in main via PR #2, so the sc rules on
+main are the live-run tree. The remaining DRAFT items are the IGV report
+(`envs/igv_reports.yaml` not built yet) and the env_export real-env builds
+(mechanics live-verified with conda 26.1.1). Minimal remaining live scope:
+on a Linux box with conda, `conda env create -f envs/igv_reports.yaml` and
+`oxo-flow run main.oxoflow -t igv_report igv_report_enabled=true` (verify
+the `Variants`→`Genes and genomic regions` label swap in the HTML); and
+`oxo-flow run main.oxoflow -t env_export_pygenometracks
+env_export_enabled=true` (verify the resolved YAML lands in
+`results/genome_tracks/envs/`).
 
 ## License
 
