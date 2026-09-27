@@ -12,8 +12,12 @@ echo "==> lint (warnings are acceptable, errors are not)"
 "$OXO" lint main.oxoflow
 
 echo "==> dry-run with default config"
+# Engine headline wording changed in oxo-flow 0.20.1 (Traitome/oxo-flow#432):
+# the old "DAG: (dry-run) N rules would execute" became
+# "Plan: would run: N | skip: M | completed: K". Accept either so CI passes
+# with both the latest release and older pins.
 "$OXO" dry-run main.oxoflow --samples first:1 > /tmp/oxo-dryrun-$$.txt 2>&1
-grep -q "would execute" /tmp/oxo-dryrun-$$.txt
+grep -qE "would (execute|run)" /tmp/oxo-dryrun-$$.txt
 
 echo "==> dry-run: single-cell path active (fixture default sc_enabled = true)"
 for inst in split_sc_bam_sc_sample_sc1_sc_group_g1 split_sc_bam_sc_sample_sc1_sc_group_g2 \
