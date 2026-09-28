@@ -115,12 +115,15 @@ Derived from `main.oxoflow`:
 oxo-flow dry-run main.oxoflow
 # 4. run
 oxo-flow run main.oxoflow -j 8
-# 5. run a subset (one group / one gene)
+# 5. run a subset (one group)
 oxo-flow run main.oxoflow --samples first:1
-oxo-flow run main.oxoflow -t plot_tracks
 # 6. single-cell mode (sc_enabled, on by default): per-group sinto split +
 #    merge + coverage of the sc groups
 oxo-flow run main.oxoflow -t coverage_sc
+# plot_tracks (gene-level gtracks plots) is off by default: it needs
+# gene-named bigWigs as in upstream's data layout — with the mini fixtures'
+# generic group names it would look up nonexistent bigWigs. Opt in with
+# plot_enabled=true only when your experiments are gene-named.
 # 7. IGV report (opt-in, deactivated by default like upstream)
 oxo-flow run main.oxoflow -t igv_report igv_report_enabled=true
 # 8. conda env export docs (opt-in, off by default — upstream runs env_export
