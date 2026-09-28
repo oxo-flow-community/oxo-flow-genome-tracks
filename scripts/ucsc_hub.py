@@ -39,10 +39,24 @@ def main():
     # upstream's plain symlink is not idempotent — re-runs die with
     # FileExistsError (live on resume) — unlink first.
     for group in groups:
+        src = os.path.join("..", "{}.bw".format(group))
+        if not os.path.exists(os.path.join(args.bw_dir, "{}.bw".format(group))):
+            # A name consolidated into samples_list without a coverage rule
+            # (e.g. a [[pairs]] pair_id) has no bigWig — skip it rather than
+            # emitting a dangling symlink and a phantom trackDb entry.
+            print(
+                "ucsc_hub: no bigWig for group '{}', skipping".format(group),
+                file=sys.stderr,
+            )
+            # also drop a stale symlink left by a pre-fix run
+            dst = os.path.join(genome_dir, "{}.bw".format(group))
+            if os.path.lexists(dst):
+                os.unlink(dst)
+            continue
         dst = os.path.join(genome_dir, "{}.bw".format(group))
         if os.path.lexists(dst):
             os.unlink(dst)
-        os.symlink(os.path.join("..", "{}.bw".format(group)), dst)
+        os.symlink(src, dst)
 
     # create genomes.txt
     with open(os.path.join(args.bw_dir, "genomes.txt"), "w") as gf:
@@ -76,6 +90,10 @@ def main():
             "",
         ]
         for group in groups:
+            if not os.path.exists(
+                os.path.join(args.bw_dir, "{}.bw".format(group))
+            ):
+                continue
             hex_color = color_dict.get(group, "#000000")
             # convert to RGB: tuple(int(hex[i:i+2], 16) for i in (1, 3, 5))
             track_color = ",".join(
