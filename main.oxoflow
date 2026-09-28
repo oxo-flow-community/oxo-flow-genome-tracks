@@ -48,8 +48,11 @@ samples_list = "g1,g2,treated,untreated"
 # you have no single-cell samples.
 sc_enabled = true
 # pair-level gtracks plots: needs gene-named bigWigs (upstream's data
-# layout); set false for the generic-named mini fixtures.
-plot_enabled = true
+# layout: {pair_id} names a gene whose annotated bigWigs carry that gene's
+# expression). The mini fixtures use generic sample/group names (g1/g2/
+# treated/untreated), so gtracks would look up a nonexistent bigWig per
+# gene — keep plots off for the mini fixtures (turn on with real data).
+plot_enabled = false
 # one aligned BAM per sc sample: {sc_bam_dir}/{sc_id}.bam (BAMs need a CB
 # cell-barcode tag per read, see test/fixtures/make_sc_fixtures.py)
 sc_bam_dir = "test/fixtures/sc_bams"
@@ -97,11 +100,12 @@ values = ["g1", "g2"]
 pair_id = "chr1-1000-2000"
 experiment = "chr1-1000-2000"
 
-# plot_tracks is exercised via the fixture region chr1-1000-2000, but
-# the gtracks wrapper looks up bigWigs by the GENE name (upstream's
-# data layout: gene-named experiments), while the mini fixtures use
-# generic sample names (S1/S2/T1) — the plots are disabled in the mini
-# test via config.plot_enabled = false (documented in the README); the
+# plot_tracks is when-gated off for the mini fixtures (plot_enabled =
+# false above): with generic sample/group names the gtracks bigWig lookup
+# cannot resolve gene-named experiments, and the fixture region pair also
+# collides with the engine's samples_list consolidation (the pair name is
+# injected into config.samples_list, so the rule's bwlist loop would
+# request bigWigs/<pair_id>.bw which no coverage rule produces). The
 # coverage + ucsc_hub tails are fully live-tested.
 
 # merge .bam files of the same group according to annotation using samtools
